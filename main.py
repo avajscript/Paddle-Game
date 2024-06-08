@@ -2,6 +2,8 @@ import pygame as pg
 import math
 import sys
 from pygame.locals import *
+from button import Button
+
 
 pg.init()
 pg.font.init()
@@ -20,6 +22,8 @@ PADDLE_MOVE_SPEED = 3
 MAX_PADDLE_MOVE_SPEED = 6
 BALL_MOVE_SPEED = 6
 PADDLE_VELOCITY_ITERATION_MS = 200
+
+
 
 # Size constants
 PADDLE_WIDTH = 10
@@ -40,6 +44,10 @@ GREEN = (0, 255, 0)
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 
+
+# Screen text elements
+
+
 # Screen information
 SCREEN_WIDTH = 600
 SCREEN_HEIGHT = 400
@@ -48,7 +56,20 @@ MID_SCREEN_HORIZONTAL = SCREEN_WIDTH / 2
 MID_SCREEN_VERTICAL = SCREEN_HEIGHT / 2
 
 DISPLAYSURF = pg.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-DISPLAYSURF.fill(WHITE)
+
+
+# load button images
+resume_button_image = pg.image.load("assets/resume_button.png").convert_alpha()
+
+# create button instances
+resume_button = Button(resume_button_image, MID_SCREEN_HORIZONTAL, MID_SCREEN_VERTICAL)
+
+
+# Game state
+running = True
+paused = False
+resetting = False
+
 pg.display.set_caption("Game")
 
 class Paddle(pg.sprite.Sprite):
@@ -136,11 +157,13 @@ class Ball(pg.sprite.Sprite):
             if self.rect.x + x + self.radius > SCREEN_WIDTH:
                 self.xDir = "left"
                 score["playerOne"] += 1
+                self.reset()
         elif self.xDir == "left":
             x = -BALL_MOVE_SPEED
             if self.rect.x - x - self.radius < 0:
                 self.xDir = "right"
                 score["playerTwo"] += 1
+                self.reset()
         if self.yDir == "up":
             y = -BALL_MOVE_SPEED
             if self.rect.y - y - self.radius < 0:
@@ -161,7 +184,11 @@ class Ball(pg.sprite.Sprite):
         elif self.xDir == "right":
             self.xDir = "left"
 
-running = True
+    def reset(self):
+        self.rect.center = (MID_SCREEN_HORIZONTAL, MID_SCREEN_VERTICAL)
+        global resetting
+        resetting = True
+
 
 P1 = Paddle(PADDLE_COLOR, 20, 20, PADDLE_WIDTH, PADDLE_HEIGHT, K_w, K_s, PADDLE_MOVE_SPEED, MAX_PADDLE_MOVE_SPEED)
 P2 = Paddle(PADDLE_COLOR, SCREEN_WIDTH - 20 - PADDLE_WIDTH, 20, PADDLE_WIDTH, PADDLE_HEIGHT, K_UP, K_DOWN,
@@ -178,27 +205,53 @@ def collideAny(sprite, rect_list):
 
 
 while running:
+    # draw the background no matter what
+    DISPLAYSURF.fill(BACKGROUND_COLOR)
+
+    if paused:
+        if resume_button.draw(DISPLAYSURF):
+            paused = False
+
+
     for event in pg.event.get():
+        if event.type == pg.KEYDOWN:
+            if resetting:
+                resetting = False
+            if event.key == pg.K_SPACE:
+                paused = True
         if event.type == QUIT:
             pg.quit()
             sys.exit()
-    # update the sprite positions
-    P1.update()
-    P2.update()
-    ball.update()
 
-    # draw the background and sprites
-    DISPLAYSURF.fill(BACKGROUND_COLOR)
-    P1.draw(DISPLAYSURF)
-    P2.draw(DISPLAYSURF)
-    ball.draw(DISPLAYSURF)
+    if not paused:
+        # update the sprite positions
+        if not resetting:
+            P1.update()
+            P2.update()
+            ball.update()
 
-    # check if ball hit any paddles
-    if collideAny(ball, paddles):
-        ball.bounce()
+        # draw the sprites
 
-    score_text = font.render(f'Player one: {score["playerOne"]}, Player two: {score["playerTwo"]}', True, PADDLE_COLOR)
-    DISPLAYSURF.blit(score_text, (MID_SCREEN_HORIZONTAL - (score_text.get_width() / 2), 10))
+        P1.draw(DISPLAYSURF)
+        P2.draw(DISPLAYSURF)
+        ball.draw(DISPLAYSURF)
+
+        # check if ball hit any paddles
+        if collideAny(ball, paddles):
+            ball.bounce()
+
+        # update text elements based on current score
+        score_text = font.render(f'Player one: {score["playerOne"]}, Player two: {score["playerTwo"]}', True,
+                                 PADDLE_COLOR)
+        press_space_text = font.render(f'Press spacebar to pause the game', True, PADDLE_COLOR)
+
+        # draw text elements
+        DISPLAYSURF.blit(score_text, (MID_SCREEN_HORIZONTAL - (score_text.get_width() / 2), 10))
+        DISPLAYSURF.blit(press_space_text, (MID_SCREEN_HORIZONTAL - (press_space_text.get_width() / 2),
+                                            SCREEN_HEIGHT - press_space_text.get_height() - 20))
+
+
+
     # update the screen on 60 fps basis
     pg.display.update()
     FramePerSec.tick(FPS)
