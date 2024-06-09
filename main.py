@@ -19,9 +19,9 @@ score = {
 
 # Movement constants
 PADDLE_MOVE_SPEED = 3
-MAX_PADDLE_MOVE_SPEED = 6
+MAX_PADDLE_MOVE_SPEED = 10
 BALL_MOVE_SPEED = 6
-PADDLE_VELOCITY_ITERATION_MS = 200
+PADDLE_VELOCITY_ITERATION_MS = 50
 
 
 
@@ -49,8 +49,8 @@ WHITE = (255, 255, 255)
 
 
 # Screen information
-SCREEN_WIDTH = 600
-SCREEN_HEIGHT = 400
+SCREEN_WIDTH = 1000
+SCREEN_HEIGHT = 600
 
 MID_SCREEN_HORIZONTAL = SCREEN_WIDTH / 2
 MID_SCREEN_VERTICAL = SCREEN_HEIGHT / 2
@@ -58,8 +58,14 @@ MID_SCREEN_VERTICAL = SCREEN_HEIGHT / 2
 DISPLAYSURF = pg.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 
 
-# load button images
+# load  images
 resume_button_image = pg.image.load("assets/resume_button.png").convert_alpha()
+paddle_one_img = pg.image.load("assets/glasspaddle2.png")
+paddle_one_img = pg.transform.scale(paddle_one_img, (32, 128))
+paddle_two_img = pg.image.load("assets/paddle.png")
+paddle_two_img = pg.transform.scale(paddle_two_img, (32, 128))
+ball_img = pg.image.load("assets/ball.png")
+ball_img = pg.transform.scale(ball_img, (32, 32))
 
 # create button instances
 resume_button = Button(resume_button_image, MID_SCREEN_HORIZONTAL, MID_SCREEN_VERTICAL)
@@ -73,52 +79,59 @@ resetting = False
 pg.display.set_caption("Game")
 
 class Paddle(pg.sprite.Sprite):
-    def __init__(self, color, x, y, width, height, up_key, down_key, velocity, max_velocity):
+    def __init__(self, image, x, y,  up_key, down_key, velocity, max_velocity):
         super().__init__()
-        self.color = color
-        self.rect = pg.Rect(x, y, width, height)
+        self.image = image
+        self.rect = self.image.get_rect()
+        self.rect.x = x
+        self.rect.y = y
         self.min_velocity = velocity
         self.velocity = velocity
         self.max_velocity = max_velocity
-        self.w_pressed = False
-        self.s_pressed = False
+        self.up_pressed = False
+        self.down_pressed = False
         self.start_ticks = 0
         self.up_key = up_key
         self.down_key = down_key
+        self.direction = ""
     def update(self):
         pressed_keys = pg.key.get_pressed()
 
+        # up key is pressed, so move paddle up
         if pressed_keys[self.up_key]:
+            self.direction = "up"
             # key isn't pressed, so set the pressed state and reset the start time
-            if not self.w_pressed:
-                self.w_pressed = True
+            if not self.up_pressed:
+                self.up_pressed = True
                 self.start_ticks = pg.time.get_ticks()
             else:
                 # key is pressed so increase the timer
                 ms = pg.time.get_ticks() - self.start_ticks
                 self.velocity = min((math.floor(ms / PADDLE_VELOCITY_ITERATION_MS) + self.min_velocity),
                                     self.max_velocity)
-
+            # move up if below top of screen
             if self.rect.y > 0:
                 self.rect.move_ip(0, -self.velocity)
+        # up key isn't pressed, remove the pressed state and reduce the velocity
         else:
-            if self.w_pressed:
-                self.w_pressed = False
+            if self.up_pressed:
+                self.up_pressed = False
                 self.start_ticks = pg.time.get_ticks()
             if self.velocity > self.min_velocity:
                 ms = pg.time.get_ticks() - self.start_ticks
                 self.velocity = max((self.max_velocity - math.floor((ms / PADDLE_VELOCITY_ITERATION_MS)),
                                      self.min_velocity))
 
+        # down key is pressed, so move paddle down
         if pressed_keys[self.down_key]:
+            self.direction = "down"
             # key isn't pressed, so set the pressed state and reset the start time
-            if not self.s_pressed:
-                self.s_pressed = True
+            if not self.down_pressed:
+                self.down_pressed = True
                 self.start_ticks = pg.time.get_ticks()
-                if self.velocity > self.min_velocity:
-                    self.start_ticks -= (self.velocity - self.min_velocity) * PADDLE_VELOCITY_ITERATION_MS
-                else:
-                    print("less than 3 velocity")
+            if self.velocity > self.min_velocity:
+                self.start_ticks -= (self.velocity - self.min_velocity) * PADDLE_VELOCITY_ITERATION_MS
+
             else:
                 # key is pressed so increase the timer
                 ms = pg.time.get_ticks() - self.start_ticks
@@ -128,57 +141,66 @@ class Paddle(pg.sprite.Sprite):
             if (self.rect.y + self.rect.height) < SCREEN_HEIGHT:
                 self.rect.move_ip(0, self.velocity)
         else:
-            if self.s_pressed:
-                self.s_pressed = False
+            if self.down_pressed:
+                self.down_pressed = False
                 self.start_ticks = pg.time.get_ticks()
             if self.velocity > self.min_velocity:
                 ms = pg.time.get_ticks() - self.start_ticks
                 self.velocity = max((self.max_velocity - math.floor((ms / PADDLE_VELOCITY_ITERATION_MS)),
                                      self.min_velocity))
 
-    def draw(self, surface):
-        pg.draw.rect(surface, self.color, self.rect)
+    def draw(self, screen):
+        screen.blit(self.image, self.rect)
 
 
 
 class Ball(pg.sprite.Sprite):
-    def __init__(self, color, x, y, length, xDir, yDir):
+    def __init__(self, image, x, y, xDir, yDir):
         super().__init__()
-        self.color = color
-        self.rect = pg.Rect(x, y, length, length)
-        self.radius = length / 2
+        self.image = image
+        self.rect = self.image.get_rect()
+        self.length = self.image.get_width()
+        self.rect.x = x
+        self.rect.y = y
         self.xDir = xDir
         self.yDir = yDir
+        self.yDirOffset = 1
     def update(self):
         x = 0
         y = 0
         if self.xDir == "right":
             x = BALL_MOVE_SPEED
-            if self.rect.x + x + self.radius > SCREEN_WIDTH:
+            if self.rect.x + x + self.length > SCREEN_WIDTH:
                 self.xDir = "left"
                 score["playerOne"] += 1
                 self.reset()
         elif self.xDir == "left":
             x = -BALL_MOVE_SPEED
-            if self.rect.x - x - self.radius < 0:
+            if self.rect.x - x < 0:
                 self.xDir = "right"
                 score["playerTwo"] += 1
                 self.reset()
         if self.yDir == "up":
             y = -BALL_MOVE_SPEED
-            if self.rect.y - y - self.radius < 0:
+            if self.rect.y - y < 0:
                 self.yDir = "down"
         elif self.yDir == "down":
             y = BALL_MOVE_SPEED
-            if self.rect.y + y + self.radius > SCREEN_HEIGHT:
+            if self.rect.y + y + self.length > SCREEN_HEIGHT:
                 self.yDir = "up"
 
-        self.rect.move_ip(x, y)
+        self.rect.move_ip(x, y * self.yDirOffset)
 
-    def draw(self, surface):
-        pg.draw.circle(surface, self.color, (self.rect.x, self.rect.y), self.radius)
+    def draw(self, screen):
+        screen.blit(self.image, self.rect)
+    def bounce(self, paddleDirection, paddleVelocity):
+        offset = paddleVelocity / 20
+        if paddleDirection == "up":
+            self.yDirOffset -= offset
+        else:
+            self.yDirOffset += offset
 
-    def bounce(self):
+        self.yDirOffset = self.yDirOffset
         if self.xDir == "left":
             self.xDir = "right"
         elif self.xDir == "right":
@@ -190,16 +212,16 @@ class Ball(pg.sprite.Sprite):
         resetting = True
 
 
-P1 = Paddle(PADDLE_COLOR, 20, 20, PADDLE_WIDTH, PADDLE_HEIGHT, K_w, K_s, PADDLE_MOVE_SPEED, MAX_PADDLE_MOVE_SPEED)
-P2 = Paddle(PADDLE_COLOR, SCREEN_WIDTH - 20 - PADDLE_WIDTH, 20, PADDLE_WIDTH, PADDLE_HEIGHT, K_UP, K_DOWN,
+P1 = Paddle(paddle_one_img, 20, 20, K_w, K_s, PADDLE_MOVE_SPEED, MAX_PADDLE_MOVE_SPEED)
+P2 = Paddle(paddle_two_img, SCREEN_WIDTH - 20 - PADDLE_WIDTH, 20, K_UP, K_DOWN,
             PADDLE_MOVE_SPEED, MAX_PADDLE_MOVE_SPEED)
-ball = Ball(BALL_COLOR, MID_SCREEN_HORIZONTAL, MID_SCREEN_VERTICAL, BALL_LENGTH, "right", "down")
+ball = Ball(ball_img, MID_SCREEN_HORIZONTAL, MID_SCREEN_VERTICAL, "right", "down")
 
 paddles = [P1, P2]
 def collideAny(sprite, rect_list):
     for rect in rect_list:
         if pg.sprite.collide_rect(sprite, rect):
-            return True
+            return rect
     return False
 
 
@@ -237,8 +259,9 @@ while running:
         ball.draw(DISPLAYSURF)
 
         # check if ball hit any paddles
-        if collideAny(ball, paddles):
-            ball.bounce()
+        paddle = collideAny(ball, paddles)
+        if paddle:
+            ball.bounce(paddle.direction, paddle.velocity)
 
         # update text elements based on current score
         score_text = font.render(f'Player one: {score["playerOne"]}, Player two: {score["playerTwo"]}', True,
